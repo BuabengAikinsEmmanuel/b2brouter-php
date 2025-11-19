@@ -129,9 +129,10 @@ composer install
 
 ```bash
 # Invoice examples
-php examples/invoices.php
 php examples/create_simple_invoice.php
+php examples/download_invoice_documents.php
 php examples/list_invoices.php
+php examples/invoices.php
 
 # Tax report examples (VeriFactu, TicketBAI)
 php examples/tax_reports.php
@@ -235,6 +236,32 @@ foreach ($invoices as $invoice) {
     echo "Invoice {$invoice['number']}: €{$invoice['total']}\n";
 }
 ```
+
+#### Download Invoice Documents
+
+Download invoices as PDF or in various XML formats:
+
+```php
+// Download invoice as PDF
+$pdfData = $client->invoices->downloadPdf($invoiceId);
+file_put_contents('invoice.pdf', $pdfData);
+
+// Download with custom parameters
+$pdfData = $client->invoices->downloadPdf($invoiceId, [
+    'disposition' => 'attachment',
+    'filename' => 'invoice-2025-001.pdf'
+]);
+
+// Download Spanish Facturae 3.2.2 XML format
+$facturaeData = $client->invoices->downloadAs($invoiceId, 'xml.facturae.3.2.2');
+file_put_contents('invoice-facturae.xml', $facturaeData);
+
+// Download UBL BIS3 format
+$ublData = $client->invoices->downloadAs($invoiceId, 'xml.ubl.invoice.bis3');
+file_put_contents('invoice-ubl.xml', $ublData);
+```
+
+**Note:** Available document types depend on your B2Brouter account configuration and the invoice type. Use the [B2Brouter API](https://developer.b2brouter.net/reference/get-document-types) to get a complete list of available document types.
 
 #### Additional Operations
 
@@ -496,6 +523,7 @@ The `examples/` directory contains complete working examples:
 ### Basic Operations
 - **create_simple_invoice.php** - Create a simple invoice with one line item
 - **create_detailed_invoice.php** - Create a multi-line invoice with calculations
+- **download_invoice_documents.php** - Create an invoice and download it as PDF and UBL BIS3
 - **list_invoices.php** - List and filter invoices
 - **paginate_all_invoices.php** - Paginate through all invoices
 - **update_invoice.php** - Update an existing invoice
