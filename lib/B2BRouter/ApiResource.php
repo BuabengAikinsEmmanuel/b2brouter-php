@@ -111,6 +111,85 @@ abstract class ApiResource
     }
 
     /**
+     * Make an API request for binary content (PDF, XML, etc.).
+     *
+     * @param string $method HTTP method
+     * @param string $path API path
+     * @param string $acceptType Accept header value (e.g., 'application/pdf')
+     * @param array $params Query parameters
+     * @param array $options Additional options
+     * @return string Binary content
+     * @throws ApiErrorException
+     */
+    protected function requestBinary($method, $path, $acceptType, $params = [], $options = [])
+    {
+        $method = strtoupper($method);
+        $url = $this->client->getApiBase() . $path;
+
+        // Build headers
+        $headers = [
+            'X-B2B-API-Key' => $this->client->getApiKey(),
+            'X-B2B-API-Version' => $this->client->getApiVersion(),
+            'Accept' => $acceptType
+        ];
+
+        // Add query parameters to URL
+        if (!empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        // Make request
+        $response = $this->client->getHttpClient()->request(
+            $method,
+            $url,
+            $headers,
+            null,
+            $this->client->getTimeout()
+        );
+
+        // Handle response
+        return $this->handleBinaryResponse($response);
+    }
+
+    /**
+     * Handle binary API response.
+     *
+     * @param array $response
+     * @return string Binary content
+     * @throws ApiErrorException
+     */
+    protected function handleBinaryResponse($response)
+    {
+        $statusCode = $response['status'];
+        $body = $response['body'];
+        $headers = $response['headers'];
+
+        // Handle error responses (still might be JSON)
+        if ($statusCode >= 400) {
+            // Try to parse as JSON error
+            $jsonBody = json_decode($body, true);
+            $message = $this->extractErrorMessage($jsonBody, $body);
+
+            switch ($statusCode) {
+                case 400:
+                case 422:
+                    throw new InvalidRequestException($message, $statusCode, $body, $jsonBody, $headers);
+                case 401:
+                    throw new AuthenticationException($message, $statusCode, $body, $jsonBody, $headers);
+                case 403:
+                    throw new PermissionException($message, $statusCode, $body, $jsonBody, $headers);
+                case 404:
+                    throw new ResourceNotFoundException($message, $statusCode, $body, $jsonBody, $headers);
+                default:
+                    throw new ApiErrorException($message, $statusCode, $body, $jsonBody, $headers);
+            }
+        }
+
+        // Return raw binary content
+        return $body;
+    }
+
+    /**
      * Extract error message from response.
      *
      * @param array|null $jsonBody

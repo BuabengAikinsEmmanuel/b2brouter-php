@@ -27,5 +27,8 @@ coverage.xml
 .env.production
 .env.development
 
+# Examples output
+/examples/output/
+
 # Neovim
 *.swn

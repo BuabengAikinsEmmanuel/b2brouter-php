@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2025-11-19
+
+### Added
+
+- **Invoice document download support** - Download invoices in various formats
+  - `InvoiceService::downloadAs($id, $documentType, $params)` - Download invoice in any supported format
+  - `InvoiceService::downloadPdf($id, $params)` - Convenience method for PDF downloads
+  - Support for PDF format (`pdf.invoice`)
+  - Support for XML formats (Facturae `xml.facturae.3.2.2`, UBL BIS3 `xml.ubl.invoice.bis3`, and more)
+  - Optional query parameters for disposition and custom filename
+- **Binary response handling** - New `ApiResource::requestBinary()` method for non-JSON responses
+  - Automatic Accept header determination based on document type
+  - Proper error handling for binary endpoints (still parses JSON errors)
+  - Returns raw binary data for PDF/XML downloads
+
+### Documentation
+
+- Added invoice document download examples to README
+- Updated PHPDoc with comprehensive documentation for new methods
+- Added unit tests for PDF, Facturae, and UBL downloads
+- Documented available document type codes
+- Added `examples/download_invoice_documents.php` - Complete example showing invoice creation and downloading in PDF and UBL BIS3 formats
+
+### Technical Details
+
+- Binary downloads return raw string data (PDF bytes, XML text, etc.)
+- Accept headers automatically set: `application/pdf` for PDF formats, `application/xml` for XML formats
+- All existing exception types work with download methods (404, 401, 403, etc.)
+- Automatic retry logic applies to document downloads
+
 ## [0.9.0] - 2025-11-18
 
 ### Added
@@ -151,5 +181,6 @@ This is a **beta release** (v0.9.x) intended for early adopters and development/
 
 ---
 
-[Unreleased]: https://github.com/B2Brouter/b2brouter-php/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/B2Brouter/b2brouter-php/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/B2Brouter/b2brouter-php/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/B2Brouter/b2brouter-php/releases/tag/v0.9.0

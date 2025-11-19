@@ -210,4 +210,55 @@ class InvoiceService extends ApiResource
         $path = "/invoices/{$id}/ack";
         return $this->request('POST', $path, $params, $options);
     }
+
+    /**
+     * Download invoice as specific document type.
+     *
+     * Supported document types include PDF and various XML formats.
+     * Common document types:
+     *   - pdf.invoice: PDF invoice format
+     *   - xml.facturae.3.2.2: Spanish Facturae XML format
+     *   - xml.ubl.invoice.bis3: Universal Business Language (UBL) format
+     *
+     * Use the B2Brouter API to get a complete list of available document types for your account.
+     *
+     * @param string $id The invoice ID
+     * @param string $documentType Document type code (e.g., 'pdf.invoice', 'xml.facturae.3.2.2', 'xml.ubl.invoice.bis3')
+     * @param array $params Additional query parameters:
+     *   - disposition: 'inline' or 'attachment'
+     *   - filename: Custom filename for Content-Disposition header
+     * @return string Binary document data
+     * @throws \B2BRouter\Exception\ResourceNotFoundException
+     * @throws \B2BRouter\Exception\AuthenticationException
+     * @throws \B2BRouter\Exception\PermissionException
+     * @throws \B2BRouter\Exception\ApiErrorException
+     */
+    public function downloadAs($id, $documentType, array $params = [])
+    {
+        $path = "/invoices/{$id}/as/{$documentType}";
+
+        // Determine Accept header based on document type
+        // PDF formats use application/pdf, XML formats use application/xml
+        $acceptHeader = (strpos($documentType, 'pdf') === 0)
+            ? 'application/pdf'
+            : 'application/xml';
+
+        return $this->requestBinary('GET', $path, $acceptHeader, $params);
+    }
+
+    /**
+     * Download invoice as PDF (convenience method).
+     *
+     * @param string $id The invoice ID
+     * @param array $params Additional query parameters
+     * @return string PDF binary data
+     * @throws \B2BRouter\Exception\ResourceNotFoundException
+     * @throws \B2BRouter\Exception\AuthenticationException
+     * @throws \B2BRouter\Exception\PermissionException
+     * @throws \B2BRouter\Exception\ApiErrorException
+     */
+    public function downloadPdf($id, array $params = [])
+    {
+        return $this->downloadAs($id, 'pdf.invoice', $params);
+    }
 }

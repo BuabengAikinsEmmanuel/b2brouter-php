@@ -296,4 +296,154 @@ class InvoiceServiceTest extends TestCase
         $this->assertEquals('POST', $request['method']);
         $this->assertStringContainsString('/invoices/inv_12345/ack', $request['url']);
     }
+
+    public function testDownloadPdf()
+    {
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockPdfData = '%PDF-1.4 mock pdf data';
+        $mockHttp->addResponse([
+            'body' => $mockPdfData,
+            'status' => 200,
+            'headers' => ['Content-Type' => 'application/pdf']
+        ]);
+
+        $result = $client->invoices->downloadPdf('inv_12345');
+
+        $this->assertEquals($mockPdfData, $result);
+        $this->assertStringStartsWith('%PDF-', $result);
+
+        // Verify request
+        $request = $mockHttp->getLastRequest();
+        $this->assertEquals('GET', $request['method']);
+        $this->assertStringContainsString('/invoices/inv_12345/as/pdf.invoice', $request['url']);
+        $this->assertEquals('application/pdf', $request['headers']['Accept']);
+        $this->assertEquals('test_api_key_12345', $request['headers']['X-B2B-API-Key']);
+    }
+
+    public function testDownloadPdfWithParameters()
+    {
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockHttp->addResponse([
+            'body' => '%PDF-1.4',
+            'status' => 200,
+            'headers' => ['Content-Type' => 'application/pdf']
+        ]);
+
+        $client->invoices->downloadPdf('inv_12345', [
+            'disposition' => 'attachment',
+            'filename' => 'invoice-12345.pdf'
+        ]);
+
+        $request = $mockHttp->getLastRequest();
+        $this->assertStringContainsString('disposition=attachment', $request['url']);
+        $this->assertStringContainsString('filename=invoice-12345.pdf', $request['url']);
+    }
+
+    public function testDownloadPdfNotFound()
+    {
+        $this->expectException(\B2BRouter\Exception\ResourceNotFoundException::class);
+
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockHttp->addResponse($this->mockResponse([
+            'message' => 'Invoice not found'
+        ], 404));
+
+        $client->invoices->downloadPdf('inv_nonexistent');
+    }
+
+    public function testDownloadPdfAuthenticationError()
+    {
+        $this->expectException(\B2BRouter\Exception\AuthenticationException::class);
+
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockHttp->addResponse($this->mockResponse([
+            'message' => 'Invalid API key'
+        ], 401));
+
+        $client->invoices->downloadPdf('inv_12345');
+    }
+
+    public function testDownloadPdfPermissionError()
+    {
+        $this->expectException(\B2BRouter\Exception\PermissionException::class);
+
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockHttp->addResponse($this->mockResponse([
+            'message' => 'No permission to access this invoice'
+        ], 403));
+
+        $client->invoices->downloadPdf('inv_12345');
+    }
+
+    public function testDownloadAsWithXml()
+    {
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockXmlData = '<?xml version="1.0"?><invoice></invoice>';
+        $mockHttp->addResponse([
+            'body' => $mockXmlData,
+            'status' => 200,
+            'headers' => ['Content-Type' => 'application/xml']
+        ]);
+
+        $result = $client->invoices->downloadAs('inv_12345', 'xml');
+
+        $this->assertEquals($mockXmlData, $result);
+        $this->assertStringStartsWith('<?xml', $result);
+
+        // Verify request
+        $request = $mockHttp->getLastRequest();
+        $this->assertEquals('GET', $request['method']);
+        $this->assertStringContainsString('/invoices/inv_12345/as/xml', $request['url']);
+        $this->assertEquals('application/xml', $request['headers']['Accept']);
+    }
+
+    public function testDownloadAsWithFacturae()
+    {
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockFacturaeData = '<?xml version="1.0" encoding="UTF-8"?><Facturae></Facturae>';
+        $mockHttp->addResponse([
+            'body' => $mockFacturaeData,
+            'status' => 200,
+            'headers' => ['Content-Type' => 'application/xml']
+        ]);
+
+        $result = $client->invoices->downloadAs('inv_12345', 'xml.facturae.3.2.2');
+
+        $this->assertEquals($mockFacturaeData, $result);
+        $this->assertStringStartsWith('<?xml', $result);
+
+        // Verify request
+        $request = $mockHttp->getLastRequest();
+        $this->assertStringContainsString('/invoices/inv_12345/as/xml.facturae.3.2.2', $request['url']);
+        $this->assertEquals('application/xml', $request['headers']['Accept']);
+    }
+
+    public function testDownloadAsWithUblBis3()
+    {
+        [$client, $mockHttp] = $this->createTestClient();
+
+        $mockUblData = '<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"></Invoice>';
+        $mockHttp->addResponse([
+            'body' => $mockUblData,
+            'status' => 200,
+            'headers' => ['Content-Type' => 'application/xml']
+        ]);
+
+        $result = $client->invoices->downloadAs('inv_12345', 'xml.ubl.invoice.bis3');
+
+        $this->assertEquals($mockUblData, $result);
+        $this->assertStringStartsWith('<?xml', $result);
+
+        // Verify request
+        $request = $mockHttp->getLastRequest();
+        $this->assertStringContainsString('/invoices/inv_12345/as/xml.ubl.invoice.bis3', $request['url']);
+        $this->assertEquals('application/xml', $request['headers']['Accept']);
+    }
 }
