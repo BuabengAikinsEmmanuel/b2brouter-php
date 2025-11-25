@@ -26,14 +26,28 @@ Official PHP SDK for the B2BRouter API - Electronic Invoicing and Tax Reporting
 
 ## Features
 
-- **Simple and intuitive API** - Clean, modern PHP interface for the B2BRouter API
+### Core Functionality
+- **Complete invoice management** - Create, retrieve, update, delete, import, validate, send, and acknowledge invoices
+- **Multi-format document downloads** - Export invoices as PDF, Spanish Facturae XML, UBL BIS3, and other formats
+- **Tax report operations** - Create, retrieve, list, download, update (corrections), and delete (annullations) tax reports
+- **Tax report settings** - Configure and manage Verifactu, TicketBAI, and other tax authority settings
+
+### Developer Experience
+- **Simple and intuitive API** - Clean, modern PHP interface with service-based architecture
+- **Zero dependencies** - Runs on PHP 7.4+ with only standard extensions (cURL, JSON, mbstring)
 - **Automatic authentication** - Secure API key management built-in
-- **Pagination support** - Easy iteration through large result sets
-- **Comprehensive error handling** - Detailed exception hierarchy with request tracking
-- **Automatic retries** - Network failures handled gracefully with exponential backoff
-- **Type safety** - Full PHP 7.4+ support with type hints
-- **Spanish compliance** - Built-in support for Verifactu and Spanish Anti-Fraud Law requirements
-- **Tax reporting** - Automated tax report generation and submission to Spanish Tax Authority (AEAT)
+- **Pagination support** - Iterator and Countable implementations for easy traversal of large result sets
+- **Comprehensive error handling** - Detailed exception hierarchy with HTTP status codes and request IDs
+- **Automatic retries** - Network failures handled gracefully with exponential backoff (configurable)
+- **Type safety** - Full PHP 7.4+ support with proper type hints
+
+### Compliance and Tax Reporting
+- **Spanish Verifactu** - Full compliance with Spanish Anti-Fraud Law (Law 11/2021) and Royal Decree 1007/2023
+- **TicketBAI** - Basque Country invoicing compliance with automatic submission
+- **QR code generation** - Automatic QR codes for invoice verification (embedded in tax reports)
+- **Hash chain management** - Tamper-proof audit trails computed and maintained automatically
+- **Automated AEAT submission** - Real-time tax report submission to Spanish Tax Authority with rate limiting
+- **Multi-jurisdiction support** - Architecture supports Italian SDI, Polish KSeF, Saudi Zatca, and more
 
 ## Requirements
 
@@ -263,16 +277,46 @@ file_put_contents('invoice-ubl.xml', $ublData);
 
 **Note:** Available document types depend on your B2Brouter account configuration and the invoice type. Use the [B2Brouter API](https://developer.b2brouter.net/reference/get-document-types) to get a complete list of available document types.
 
+#### Import Invoices
+
+Import invoices from external sources or systems:
+
+```php
+$invoice = $client->invoices->import($accountId, [
+    'invoice' => [
+        'number' => 'EXT-2025-001',
+        'date' => '2025-01-15',
+        'currency' => 'EUR',
+        'contact' => [
+            'name' => 'External Customer',
+            'tin_value' => 'ESB12345678',
+            'country' => 'ES',
+        ],
+        'invoice_lines_attributes' => [
+            [
+                'description' => 'Imported Service',
+                'quantity' => 1,
+                'price' => 500.00,
+                'taxes_attributes' => [
+                    ['name' => 'IVA', 'category' => 'S', 'percent' => 21.0]
+                ]
+            ]
+        ]
+    ],
+    'send_after_import' => true  // Optionally send immediately
+]);
+```
+
 #### Additional Operations
 
 ```php
 // Validate an invoice
 $validation = $client->invoices->validate($invoiceId);
 
-// Send an invoice to customer
+// Send an invoice to customer and generate tax reports
 $result = $client->invoices->send($invoiceId);
 
-// Mark invoice state
+// Mark invoice state (new, sent, paid, etc.)
 $invoice = $client->invoices->markAs($invoiceId, [
     'state' => 'sent'
 ]);
@@ -293,17 +337,90 @@ Tax reports are automatically generated based on the fiscal obligations of the i
 
 Once configured, tax reports will contain critical compliance information including QR codes for verification.
 
-#### Retrieve a Tax Report
+#### Configure Tax Report Settings
+
+Configure Verifactu or TicketBAI settings for your account:
+
+```php
+// Create Verifactu settings
+$settings = $client->taxReportSettings->create($accountId, [
+    'tax_report_setting' => [
+        'code' => 'VeriFactu',
+        'start_date' => '2025-01-01',
+        'auto_generate' => true,
+        'auto_send' => true,
+        'reason_vat_exempt' => 'E1',
+        'special_regime_key' => '01',
+    ]
+]);
+
+// Retrieve settings
+$settings = $client->taxReportSettings->retrieve($accountId, 'VeriFactu');
+
+// Update settings
+$settings = $client->taxReportSettings->update($accountId, 'VeriFactu', [
+    'tax_report_setting' => [
+        'auto_send' => false  // Disable automatic submission
+    ]
+]);
+
+// List all settings
+$allSettings = $client->taxReportSettings->all($accountId);
+
+// Delete settings
+$client->taxReportSettings->delete($accountId, 'VeriFactu');
+```
+
+#### Create Tax Reports Directly
+
+For Point of Sale systems or when not using B2BRouter invoices:
+
+```php
+// Create a Verifactu tax report
+$taxReport = $client->taxReports->create($accountId, [
+    'tax_report' => [
+        'type' => 'Verifactu',
+        'invoice_date' => '2025-01-15',
+        'invoice_number' => '2025-001',
+        'description' => 'Professional services',
+        'customer_party_tax_id' => 'B12345678',
+        'customer_party_country' => 'es',
+        'customer_party_name' => 'Cliente S.L.',
+        'tax_inclusive_amount' => 121.0,
+        'tax_amount' => 21.0,
+        'invoice_type_code' => 'F1',
+        'currency' => 'EUR',
+        'tax_breakdowns' => [
+            [
+                'name' => 'IVA',
+                'category' => 'S',
+                'non_exemption_code' => 'S1',
+                'percent' => 21.0,
+                'taxable_base' => 100.0,
+                'tax_amount' => 21.0,
+                'special_regime_key' => '01'
+            ]
+        ]
+    ]
+]);
+```
+
+#### Retrieve Tax Reports
 
 ```php
 // Get tax report ID from invoice response
 $taxReportId = $invoice['tax_report_ids'][0];
 
-// Retrieve the tax report
+// Retrieve the tax report with QR code
 $taxReport = $client->taxReports->retrieve($taxReportId);
 
 echo "Tax Report ID: {$taxReport['id']}\n";
 echo "State: {$taxReport['state']}\n";
+
+// Save QR code (base64 encoded PNG)
+if (!empty($taxReport['qr'])) {
+    file_put_contents('qr_code.png', base64_decode($taxReport['qr']));
+}
 ```
 
 #### List Tax Reports
@@ -312,12 +429,55 @@ echo "State: {$taxReport['state']}\n";
 $taxReports = $client->taxReports->all($accountId, [
     'limit' => 25,
     'offset' => 0,
-    'invoice_id' => $invoiceId,  // Filter by invoice
+    'invoice_id' => $invoiceId,        // Filter by invoice
+    'sent_at_from' => '2025-01-01',    // Filter by sent date
 ]);
 
 foreach ($taxReports as $report) {
     echo "Tax Report: {$report['label']} - {$report['state']}\n";
 }
+```
+
+#### Download Tax Report XML
+
+```php
+$xml = $client->taxReports->download($taxReportId);
+file_put_contents("tax_report_{$taxReportId}.xml", $xml);
+```
+
+#### Update Tax Reports (Corrections)
+
+Create corrections (subsanación) for Verifactu tax reports:
+
+```php
+$correctedReport = $client->taxReports->update($taxReportId, [
+    'tax_report' => [
+        'description' => 'CORRECTED: Updated description',
+        'tax_inclusive_amount' => 133.1,
+        'tax_amount' => 23.1,
+        'tax_breakdowns' => [
+            [
+                'name' => 'IVA',
+                'category' => 'S',
+                'non_exemption_code' => 'S1',
+                'percent' => 21.0,
+                'taxable_base' => 110.0,
+                'tax_amount' => 23.1,
+                'special_regime_key' => '01'
+            ]
+        ]
+    ]
+]);
+```
+
+#### Delete Tax Reports (Annullations)
+
+Create annullations (anulación) for tax reports:
+
+```php
+$annullation = $client->taxReports->delete($taxReportId);
+echo "Annullation ID: {$annullation['id']}\n";
+echo "State: {$annullation['state']}\n";
 ```
 
 #### Tax Report States
@@ -518,33 +678,56 @@ try {
 
 ## Examples
 
-The `examples/` directory contains complete working examples:
+The `examples/` directory contains complete working examples demonstrating all SDK features:
 
-### Basic Operations
+### Invoice Operations
 - **create_simple_invoice.php** - Create a simple invoice with one line item
 - **create_detailed_invoice.php** - Create a multi-line invoice with calculations
-- **download_invoice_documents.php** - Create an invoice and download it as PDF and UBL BIS3
-- **list_invoices.php** - List and filter invoices
-- **paginate_all_invoices.php** - Paginate through all invoices
+- **download_invoice_documents.php** - Download invoices as PDF and XML formats (Facturae, UBL BIS3)
+- **list_invoices.php** - List and filter invoices with pagination
+- **paginate_all_invoices.php** - Iterate through all invoices efficiently
 - **update_invoice.php** - Update an existing invoice
-
-### Workflows
 - **invoice_workflow.php** - Complete invoice lifecycle (create, retrieve, validate, update, send)
 - **invoices.php** - Comprehensive CRUD operations demo
+
+### Tax Reporting
+- **tax_reports.php** - Complete CRUD operations for Verifactu and TicketBAI
+- **verifactu_tax_report.php** - Verifactu-specific workflow with corrections and annullations
+- **ticketbai_tax_report.php** - TicketBAI-specific workflow for Basque Country
+- **list_tax_reports.php** - List and filter tax reports with analysis
+- **tax_report_setup.php** - Configure tax report settings (Verifactu, TicketBAI)
 
 ### Spanish Compliance
 - **invoicing_in_spain_with_verifactu.php** - Complete example of Spanish invoicing with automatic Verifactu compliance, tax report generation, and QR code retrieval
 
-To run an example:
+### Running Examples
 
-```bash
-# Set your environment variables
-export B2B_API_KEY=your-api-key
-export B2B_ACCOUNT_ID=your-account-id
+1. **Setup environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your B2B_API_KEY and B2B_ACCOUNT_ID
+   ```
 
-# Run the example
-php examples/invoicing_in_spain_with_verifactu.php
-```
+2. **Install dependencies:**
+   ```bash
+   composer install
+   ```
+
+3. **Run any example:**
+   ```bash
+   # Invoice examples
+   php examples/create_simple_invoice.php
+   php examples/download_invoice_documents.php
+
+   # Tax report examples
+   php examples/tax_reports.php
+   php examples/verifactu_tax_report.php
+
+   # Spanish compliance
+   php examples/invoicing_in_spain_with_verifactu.php
+   ```
+
+All examples automatically load credentials from your `.env` file via `examples/bootstrap.php`.
 
 ## Development
 
@@ -573,14 +756,147 @@ By default, `composer test` excludes external integration tests that make real H
 
 For more information about contributing, setting up your development environment, and coding standards, see the [Developer Guide](docs/DEVELOPER_GUIDE.md).
 
+## API Reference
+
+### Complete Feature Matrix
+
+The SDK provides comprehensive coverage of the B2BRouter API with the following operations:
+
+#### Invoice Service (`$client->invoices`)
+
+| Method | HTTP | Endpoint | Description |
+|--------|------|----------|-------------|
+| `create()` | POST | `/accounts/{account}/invoices` | Create a new invoice |
+| `retrieve()` | GET | `/invoices/{id}` | Retrieve invoice details |
+| `update()` | PUT | `/invoices/{id}` | Update an existing invoice |
+| `delete()` | DELETE | `/invoices/{id}` | Delete an invoice |
+| `all()` | GET | `/accounts/{account}/invoices` | List invoices (paginated) |
+| `import()` | POST | `/accounts/{account}/invoices/import` | Import invoice from external source |
+| `validate()` | GET | `/invoices/{id}/validate` | Validate invoice structure |
+| `send()` | POST | `/invoices/send_invoice/{id}` | Send invoice and generate tax reports |
+| `acknowledge()` | POST | `/invoices/{id}/ack` | Acknowledge received invoice |
+| `markAs()` | POST | `/invoices/{id}/mark_as` | Update invoice state |
+| `downloadAs()` | GET | `/invoices/{id}/as/{documentType}` | Download in specified format |
+| `downloadPdf()` | GET | `/invoices/{id}/as/pdf.invoice` | Download as PDF (convenience) |
+
+**Supported Download Formats:**
+- `pdf.invoice` - PDF format
+- `xml.facturae.3.2.2` - Spanish Facturae XML
+- `xml.ubl.invoice.bis3` - Universal Business Language BIS3
+- Additional formats per account configuration
+
+**Common Query Parameters:**
+- Pagination: `offset`, `limit` (max 500)
+- Date filtering: `date_from`, `date_to`, `due_date_from`, `due_date_to`
+- State filtering: `new`, `sent`, `paid`, `error`, `refused`, etc.
+- Search: `number`, `taxcode`
+
+#### Tax Report Service (`$client->taxReports`)
+
+| Method | HTTP | Endpoint | Description |
+|--------|------|----------|-------------|
+| `create()` | POST | `/accounts/{account}/tax_reports` | Create tax report directly |
+| `retrieve()` | GET | `/tax_reports/{id}` | Retrieve tax report with QR code |
+| `all()` | GET | `/accounts/{account}/tax_reports` | List tax reports (paginated) |
+| `download()` | GET | `/tax_reports/{id}/download` | Download XML representation |
+| `update()` | PATCH | `/tax_reports/{id}` | Create correction (subsanación) |
+| `delete()` | DELETE | `/tax_reports/{id}` | Create annullation (anulación) |
+
+**Supported Tax Report Types:**
+- `Verifactu` - Spanish compliance (AEAT)
+- `TicketBai` - Basque Country compliance
+- `SDI` - Italian Sistema di Interscambio
+- `KSeF` - Polish National e-Invoicing System
+- `Zatca` - Saudi Arabian e-invoicing
+
+**Tax Report States:**
+- `processing` - Being chained and prepared
+- `registered` - Successfully submitted
+- `error` - Submission failed
+- `registered_with_errors` - Submitted with warnings
+- `annulled` - Cancelled
+
+**Query Parameters:**
+- `invoice_id` - Filter by invoice
+- `sent_at_from`, `sent_at_to` - Filter by submission date
+- `updated_at_from`, `updated_at_to` - Filter by update date
+
+#### Tax Report Setting Service (`$client->taxReportSettings`)
+
+| Method | HTTP | Endpoint | Description |
+|--------|------|----------|-------------|
+| `create()` | POST | `/accounts/{account}/tax_report_settings` | Configure tax authority settings |
+| `retrieve()` | GET | `/accounts/{account}/tax_report_settings/{code}` | Get specific settings |
+| `update()` | PUT | `/accounts/{account}/tax_report_settings/{code}` | Update settings |
+| `all()` | GET | `/accounts/{account}/tax_report_settings` | List all settings |
+| `delete()` | DELETE | `/accounts/{account}/tax_report_settings/{code}` | Delete settings |
+
+**Common Setting Codes:**
+- `VeriFactu` - Spanish Verifactu configuration
+- `TicketBai` - TicketBAI configuration
+
+### SDK Architecture
+
+#### Core Classes
+
+- **B2BRouterClient** - Main client with configuration and service access
+- **ApiResource** - Base class for all API operations with request handling
+- **Collection** - Paginated result wrapper (implements Iterator, Countable)
+
+#### Service Classes
+
+- **InvoiceService** - All invoice operations (lib/B2BRouter/Service/InvoiceService.php:1)
+- **TaxReportService** - Tax report operations (lib/B2BRouter/Service/TaxReportService.php:1)
+- **TaxReportSettingService** - Settings management (lib/B2BRouter/Service/TaxReportSettingService.php:1)
+
+#### Exception Hierarchy
+
+All exceptions extend `ApiErrorException` and include:
+- HTTP status code
+- Request ID (for support)
+- Response body (JSON)
+- HTTP headers
+
+```
+ExceptionInterface
+└── ApiErrorException (Base)
+    ├── ApiConnectionException (Network errors)
+    ├── AuthenticationException (401 Unauthorized)
+    ├── PermissionException (403 Forbidden)
+    ├── ResourceNotFoundException (404 Not Found)
+    └── InvalidRequestException (400, 422 Validation errors)
+```
+
+### Configuration Options
+
+```php
+$client = new B2BRouterClient('api-key', [
+    'api_base' => 'https://api.b2brouter.net',     // API endpoint
+    'api_version' => '2025-10-13',                  // API version
+    'timeout' => 80,                                // Request timeout (seconds)
+    'max_retries' => 3,                             // Retry attempts on connection failure
+    'http_client' => $customClient                  // Custom HTTP client (optional)
+]);
+```
+
+**Default Values:**
+- `api_base`: `https://api-staging.b2brouter.net` (staging)
+- `api_version`: `2025-10-13`
+- `timeout`: `80` seconds
+- `max_retries`: `3` attempts
+
 ## Documentation
 
+### SDK Documentation
+- **[API Reference](docs/API_REFERENCE.md)** - Complete PHP SDK reference with all methods, parameters, and examples
 - **[Spanish Invoicing Guide](docs/SPANISH_INVOICING.md)** - Comprehensive guide for Spanish Verifactu compliance
-- **[Tax Reports Documentation](docs/TAX_REPORTS.md)** - Detailed tax reporting documentation
-- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Contributing and development setup
-- **[API Reference](https://developer.b2brouter.net/v2025-10-13/reference)** - Complete API documentation
-- [B2Brouter Verifactu Guide](https://developer.b2brouter.net/v2025-10-13/docs/verifactu) - Full B2Brouter Verifactu Guide.
-- **[Developer Portal](https://developer.b2brouter.net)** - Guides and tutorials
+- **[Tax Reports Documentation](docs/TAX_REPORTS.md)** - Detailed tax reporting documentation for Verifactu and TicketBAI
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Contributing, development setup, and IDE configuration
+
+### B2BRouter Platform Documentation
+- **[B2BRouter API Reference](https://developer.b2brouter.net/v2025-10-13/reference)** - REST API documentation
+- **[Verifactu Guide](https://developer.b2brouter.net/v2025-10-13/docs/verifactu)** - Complete B2BRouter Verifactu guide
+- **[Developer Portal](https://developer.b2brouter.net)** - Guides, tutorials, and integration resources
 
 ## Support
 
